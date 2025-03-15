@@ -12,10 +12,12 @@ RUN pip install --no-cache-dir -r requirements.txt
 
 # 复制应用代码
 COPY app.py .
-COPY .env .
 
 # 暴露端口
 EXPOSE 9006
+
+# 设置默认环境变量
+ENV FORWARD_URL=https://api.deepseek.com/v1/chat/completions
 
 # 启动应用
 CMD ["python", "app.py"] 
