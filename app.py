@@ -3,11 +3,15 @@ import requests
 import json
 import re
 import os
+from dotenv import load_dotenv
+
+# 加载环境变量
+load_dotenv()
 
 app = Flask(__name__)
 
-# 从环境变量获取API转发地址，如果未设置则使用OpenAI的API地址
-API_FORWARD_URL = os.environ.get('API_FORWARD_URL', 'https://api.openai.com/v1/chat/completions')
+# 获取转发地址，如果环境变量未设置则使用默认值
+FORWARD_URL = os.getenv('FORWARD_URL', 'https://api.deepseek.comv1/chat/completions')
 
 @app.route('/v1/chat/completions', methods=['POST'])
 def chat_completions():
@@ -30,9 +34,9 @@ def chat_completions():
     
     user_data['stream'] = True
     
-    # 转发请求到环境变量定义的地址
+    # 转发请求
     response = requests.post(
-        API_FORWARD_URL,
+        FORWARD_URL,
         json=user_data,
         headers=headers,
         stream=True

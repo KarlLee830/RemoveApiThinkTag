@@ -1,18 +1,21 @@
+# 使用 Python 3.9 作为基础镜像
 FROM python:3.9-slim
 
+# 设置工作目录
 WORKDIR /app
 
+# 复制依赖文件
 COPY requirements.txt .
-# 确保安装特定版本的依赖
+
+# 安装依赖
 RUN pip install --no-cache-dir -r requirements.txt
 
+# 复制应用代码
 COPY app.py .
+COPY .env .
 
-# 设置环境变量，可在运行容器时覆盖
-ENV API_FORWARD_URL="https://api.openai.com/v1/chat/completions"
-
-# 暴露9006端口
+# 暴露端口
 EXPOSE 9006
 
-# 运行应用
+# 启动应用
 CMD ["python", "app.py"] 
