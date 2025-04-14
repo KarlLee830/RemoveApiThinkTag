@@ -29,24 +29,6 @@ def generate_random_id():
     """生成随机ID，类似于原始代码中的函数"""
     return ''.join(random.choice('0123456789abcdef') for _ in range(32))
 
-def create_reasoning_chunk(content, original_data, model_name):
-    """创建推理数据块"""
-    return {
-        "id": original_data.get("id", generate_random_id()),
-        "created": original_data.get("created", int(time.time())),
-        "model": model_name,
-        "object": "chat.completion.chunk",
-        "choices": [{
-            "delta": {
-                "content": "",
-                "reasoning_content": content,
-                "role": "assistant"
-            },
-            "index": 0
-        }],
-        "usage": None
-    }
-
 def create_content_chunk(content, original_data):
     """创建内容数据块"""
     return {
@@ -74,16 +56,10 @@ def process_non_stream_response(response_data):
         think_match = re.search(r'<think>([\s\S]*?)</think>', content)
         
         if think_match:
-            # 提取思考内容
-            think_content = think_match.group(1)
-            
             # 更新消息内容，移除<think>标签
             response_data["choices"][0]["message"]["content"] = re.sub(
                 r'<think>[\s\S]*?</think>', '', content
             ).strip()
-            
-            # 添加reasoning_content字段
-            response_data["choices"][0]["message"]["reasoning_content"] = think_content
     
     return response_data
 
@@ -143,13 +119,7 @@ async def process_stream_response(response, model_name="deepseek-r1"):
                             # 提取<think>标签中的内容（如果在同一块中关闭）
                             if '</think>' in content:
                                 think_match = re.search(r'<think>([\s\S]*?)</think>', content)
-                                if think_match and think_match.group(1):
-                                    # 发送思考内容
-                                    chunks = re.findall(r'.{1,5}|.+', think_match.group(1))
-                                    for chunk in chunks:
-                                        reasoning_chunk = create_reasoning_chunk(chunk, json_data, model_name)
-                                        yield f"data: {json.dumps(reasoning_chunk)}\n\n".encode('utf-8')
-                                    
+                                if think_match:
                                     # 处理</think>后的内容
                                     after_think = content.split('</think>')[1] if '</think>' in content else ''
                                     if after_think:
@@ -168,13 +138,6 @@ async def process_stream_response(response, model_name="deepseek-r1"):
                             parts = content.split('</think>')
                             think_content += parts[0]
                             
-                            # 发送完整的思考内容
-                            if think_content.strip():
-                                chunks = re.findall(r'.{1,5}|.+', think_content)
-                                for chunk in chunks:
-                                    reasoning_chunk = create_reasoning_chunk(chunk, json_data, model_name)
-                                    yield f"data: {json.dumps(reasoning_chunk)}\n\n".encode('utf-8')
-                            
                             # 重置思考状态
                             inside_think = False
                             think_content = ''
@@ -188,14 +151,6 @@ async def process_stream_response(response, model_name="deepseek-r1"):
                         elif inside_think:
                             # 在思考内部，累积内容
                             think_content += content
-                            
-                            # 发送思考内容块以获得更好的流式体验
-                            if len(think_content) > 10:
-                                chunks = re.findall(r'.{1,5}|.+', think_content)
-                                for chunk in chunks:
-                                    reasoning_chunk = create_reasoning_chunk(chunk, json_data, model_name)
-                                    yield f"data: {json.dumps(reasoning_chunk)}\n\n".encode('utf-8')
-                                think_content = ''
                         
                         else:
                             # 思考之外的常规内容
@@ -219,15 +174,6 @@ async def process_stream_response(response, model_name="deepseek-r1"):
     # 处理任何剩余缓冲区
     if buffer.strip():
         yield f"{buffer}\n\n".encode('utf-8')
-    
-    # 如果我们有任何剩余的思考内容，发送它
-    if inside_think and think_content.strip():
-        timestamp = int(time.time())
-        id = generate_random_id()
-        reasoning_chunk = create_reasoning_chunk(
-            think_content, {"created": timestamp, "id": id}, model_name
-        )
-        yield f"data: {json.dumps(reasoning_chunk)}\n\n".encode('utf-8')
 
 @app.post("/v1/chat/completions")
 async def handle_request(request: Request, completion_req: CompletionRequest):
